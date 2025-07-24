@@ -475,13 +475,13 @@ function ChallengeCard({ challenge }: { challenge: any }) {
       <div className="flex justify-between items-start mb-3">
         <h3 className="text-lg font-semibold text-gray-900">{challenge.name}</h3>
         <div className="flex items-center space-x-2">
-          <span className={`px-2 py-1 text-xs rounded-full ${
-            challenge.status === "active" ? "bg-green-100 text-green-800" :
-            challenge.status === "pending" ? "bg-yellow-100 text-yellow-800" :
-            "bg-gray-100 text-gray-800"
-          }`}>
-            {challenge.status}
-          </span>
+        <span className={`px-2 py-1 text-xs rounded-full ${
+          challenge.status === "active" ? "bg-green-100 text-green-800" :
+          challenge.status === "pending" ? "bg-yellow-100 text-yellow-800" :
+          "bg-gray-100 text-gray-800"
+        }`}>
+          {challenge.status}
+        </span>
                      {isCreator && (
              <button
                onClick={() => setShowDeleteConfirm(true)}
@@ -784,37 +784,37 @@ function ChallengeDetails({ challenge, leaderboard, onDeleteChallenge }: {
       <div className="space-y-4">
         {/* Daily Tasks Tab */}
         {activeTab === "tasks" && (
-          <div>
+        <div>
             <h4 className="font-medium text-gray-900 mb-4">Daily Tasks</h4>
-            <div className="space-y-2">
-              {challenge.dailyTasks.map((task: any, index: number) => {
-                const taskProgress = todaysProgress?.completedTasks.find((t: any) => t.taskIndex === index);
-                return (
+          <div className="space-y-2">
+            {challenge.dailyTasks.map((task: any, index: number) => {
+              const taskProgress = todaysProgress?.completedTasks.find((t: any) => t.taskIndex === index);
+              return (
                   <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium text-sm">{task.name}</p>
-                      <p className="text-xs text-gray-600">{task.description}</p>
-                      {task.target && (
-                        <p className="text-xs text-gray-500">
-                          Target: {task.target} {task.unit}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => handleTaskToggle(index, !taskProgress?.completed)}
-                      className={`px-3 py-1 text-sm rounded ${
-                        taskProgress?.completed
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                    >
-                      {taskProgress?.completed ? "✓ Done" : "Mark Done"}
-                    </button>
+                  <div>
+                    <p className="font-medium text-sm">{task.name}</p>
+                    <p className="text-xs text-gray-600">{task.description}</p>
+                    {task.target && (
+                      <p className="text-xs text-gray-500">
+                        Target: {task.target} {task.unit}
+                      </p>
+                    )}
                   </div>
-                );
-              })}
-            </div>
+                  <button
+                    onClick={() => handleTaskToggle(index, !taskProgress?.completed)}
+                    className={`px-3 py-1 text-sm rounded ${
+                      taskProgress?.completed
+                        ? "bg-green-100 text-green-800"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    {taskProgress?.completed ? "✓ Done" : "Mark Done"}
+                  </button>
+                </div>
+              );
+            })}
           </div>
+        </div>
         )}
 
         {/* Leaderboard Tab */}
