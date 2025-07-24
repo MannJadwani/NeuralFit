@@ -43,7 +43,7 @@ export const createChallenge = mutation({
       totalScore: 0,
     });
 
-    return challengeId;
+    return { challengeId, inviteCode };
   },
 });
 
@@ -329,5 +329,197 @@ export const getPendingInvitations = query({
     }
 
     return invitationsWithDetails;
+  },
+});
+
+export const getChallengeByInviteCode = query({
+  args: {
+    inviteCode: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // This function doesn't require authentication for the invite preview
+    const challenge = await ctx.db
+      .query("challenges")
+      .withIndex("by_invite_code", (q) => q.eq("inviteCode", args.inviteCode))
+      .first();
+
+    if (!challenge) {
+      return null;
+    }
+
+    // Get challenge creator details
+    const creator = await ctx.db.get(challenge.createdBy);
+    
+    return {
+      ...challenge,
+      creatorName: creator?.name || creator?.email || "Someone",
+      participantCount: challenge.participants.length,
+    };
+  },
+});
+
+export const joinChallengeAfterSignup = mutation({
+  args: {
+    inviteCode: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const challenge = await ctx.db
+      .query("challenges")
+      .withIndex("by_invite_code", (q) => q.eq("inviteCode", args.inviteCode))
+      .first();
+
+    if (!challenge) {
+      throw new Error("Challenge not found");
+    }
+
+    if (challenge.participants.includes(userId)) {
+      return challenge._id; // Already participating
+    }
+
+    // Add user to participants
+    await ctx.db.patch(challenge._id, {
+      participants: [...challenge.participants, userId],
+    });
+
+    // Initialize progress for the new participant
+    await ctx.db.insert("challengeProgress", {
+      challengeId: challenge._id,
+      userId,
+      date: new Date().toISOString().split('T')[0],
+      completedTasks: challenge.dailyTasks.map((_, index) => ({
+        taskIndex: index,
+        completed: false,
+      })),
+      totalScore: 0,
+    });
+
+    return challenge._id;
+  },
+});
+
+export const removeParticipantFromChallenge = mutation({
+  args: {
+    challengeId: v.id("challenges"),
+    participantId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const challenge = await ctx.db.get(args.challengeId);
+    if (!challenge) {
+      throw new Error("Challenge not found");
+    }
+
+    // Only the challenge creator can remove participants
+    if (challenge.createdBy !== userId) {
+      throw new Error("Only the challenge creator can remove participants");
+    }
+
+    // Can't remove the creator themselves
+    if (args.participantId === challenge.createdBy) {
+      throw new Error("Cannot remove the challenge creator");
+    }
+
+    // Check if the participant is actually in the challenge
+    if (!challenge.participants.includes(args.participantId)) {
+      throw new Error("User is not a participant in this challenge");
+    }
+
+    // Remove participant from the challenge
+    const updatedParticipants = challenge.participants.filter(
+      (participantId) => participantId !== args.participantId
+    );
+
+    await ctx.db.patch(args.challengeId, {
+      participants: updatedParticipants,
+    });
+
+    // Remove all progress entries for this participant
+    const progressEntries = await ctx.db
+      .query("challengeProgress")
+      .withIndex("by_challenge_and_user", (q) => 
+        q.eq("challengeId", args.challengeId).eq("userId", args.participantId)
+      )
+      .collect();
+
+    for (const progress of progressEntries) {
+      await ctx.db.delete(progress._id);
+    }
+
+    return { success: true };
+  },
+});
+
+export const getChallengeParticipants = query({
+  args: {
+    challengeId: v.id("challenges"),
+  },
+  handler: async (ctx, args) => {
+    const challenge = await ctx.db.get(args.challengeId);
+    if (!challenge) return [];
+
+    const participants = [];
+    for (const participantId of challenge.participants) {
+      const user = await ctx.db.get(participantId);
+      if (user) {
+        participants.push({
+          userId: participantId,
+          name: (user as any).name || (user as any).email || "Anonymous",
+          email: (user as any).email || "",
+          isCreator: participantId === challenge.createdBy,
+        });
+      }
+    }
+
+    return participants;
+  },
+});
+
+export const deleteChallenge = mutation({
+  args: {
+    challengeId: v.id("challenges"),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const challenge = await ctx.db.get(args.challengeId);
+    if (!challenge) {
+      throw new Error("Challenge not found");
+    }
+
+    // Only the challenge creator can delete the challenge
+    if (challenge.createdBy !== userId) {
+      throw new Error("Only the challenge creator can delete this challenge");
+    }
+
+    // Delete all challenge progress entries
+    const progressEntries = await ctx.db
+      .query("challengeProgress")
+      .withIndex("by_challenge", (q) => q.eq("challengeId", args.challengeId))
+      .collect();
+
+    for (const progress of progressEntries) {
+      await ctx.db.delete(progress._id);
+    }
+
+    // Delete all challenge invitations
+    const invitations = await ctx.db
+      .query("challengeInvitations")
+      .withIndex("by_challenge", (q) => q.eq("challengeId", args.challengeId))
+      .collect();
+
+    for (const invitation of invitations) {
+      await ctx.db.delete(invitation._id);
+    }
+
+    // Finally, delete the challenge itself
+    await ctx.db.delete(args.challengeId);
+
+    return { success: true };
   },
 });
